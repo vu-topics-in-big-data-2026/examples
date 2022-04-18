@@ -11,4 +11,9 @@ Now you can follow the other bq notebook where you can run queries. Take a look 
 Repeat the same for traffic -- your bucket where you upload traffic data may be different.
 
 * bq mkdef --source_format=PARQUET --require_hive_partition_filter=TRUE --hive_partitioning_mode=CUSTOM --hive_partitioning_source_uri_prefix=gs://inrix_traffic/traffic_inrix_feb_2022/traffic.parquet/{county:STRING}/{year:INTEGER}/{month:INTEGER} gs://inrix_traffic/traffic_inrix_feb_2022/traffic.parquet/*.parquet > trafficdefinition.bq.txt
-* bq mk --table   --external_table_definition=trafficdefinition.bq.txt  traffic.inrix
+* bq mk --table   --external_table_definition=trafficdefinition.bq.txt  traffic.inrix --> assuming you have a dataset named traffic
+* Now a query like this succeeds --> your project name, and data set name and table name will change.
+
+```
+SELECT count(*) FROM `scopelab-smarttransit.traffic.inrix`  where county='davidson' and year=2022
+```
