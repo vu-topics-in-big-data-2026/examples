@@ -10,5 +10,5 @@ Now you can follow the other bq notebook where you can run queries. Take a look 
 
 Repeat the same for traffic -- your bucket where you upload traffic data may be different.
 
-* bq mkdef --source_format=PARQUET --require_hive_partition_filter=TRUE --hive_partitioning_mode=CUSTOM --hive_partitioning_source_uri_prefix=gs://inrix_traffic/traffic_inrix_feb_2022/traffic.parquet/{county:STRING}/{year:INTEGER}/{month:INTEGER} gs://inrix_traffic/traffic_inrix_feb_2022/traffic.parquet/* > trafficdefinition.bq.txt
+* bq mkdef --source_format=PARQUET --require_hive_partition_filter=TRUE --hive_partitioning_mode=CUSTOM --hive_partitioning_source_uri_prefix=gs://inrix_traffic/traffic_inrix_feb_2022/traffic.parquet/{county:STRING}/{year:INTEGER}/{month:INTEGER} gs://inrix_traffic/traffic_inrix_feb_2022/traffic.parquet/*.parquet > trafficdefinition.bq.txt
 * bq mk --table   --external_table_definition=trafficdefinition.bq.txt  traffic.inrix
