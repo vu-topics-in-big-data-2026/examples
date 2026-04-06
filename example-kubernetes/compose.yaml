@@ -1,0 +1,46 @@
+services:
+  redpanda:
+    image: redpandadata/redpanda:latest
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:29092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:29092
+      - --pandaproxy-addr=internal://0.0.0.0:8082,external://0.0.0.0:28082
+      - --advertise-pandaproxy-addr=internal://redpanda:8082,external://localhost:28082
+    ports:
+      - "29092:29092"
+      - "28081:8081"
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health", "--api-urls", "localhost:9644"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  producer:
+    build: ./producer
+    image: iot-producer:v1
+    environment:
+      KAFKA_BROKER: redpanda:9092
+      TOPIC_NAME: iot-sensors
+      NUM_PARTITIONS: "3"
+    volumes:
+      - ./data:/data
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+  analyzer:
+    build: ./analyzer
+    image: iot-analyzer:v1
+    environment:
+      KAFKA_BROKER: redpanda:9092
+      TOPIC_NAME: iot-sensors
+      TEMP_HIGH_THRESHOLD: "40.0"
+      TEMP_LOW_THRESHOLD: "5.0"
+    depends_on:
+      redpanda:
+        condition: service_healthy

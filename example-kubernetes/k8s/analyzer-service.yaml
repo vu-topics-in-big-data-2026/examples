@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: analyzer
+  namespace: streaming-iot
+spec:
+  type: ClusterIP
+  selector:
+    app: analyzer
+  ports:
+    - port: 80
+      targetPort: 80

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: iot-config
+  namespace: streaming-iot
+data:
+  KAFKA_BROKER: "redpanda:9092"
+  TOPIC_NAME: "iot-sensors"
+  TEMP_HIGH_THRESHOLD: "40.0"
+  TEMP_LOW_THRESHOLD: "5.0"
+  NUM_PARTITIONS: "3"

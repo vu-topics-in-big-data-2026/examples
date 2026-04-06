@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: producer
+  namespace: streaming-iot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: producer
+  template:
+    metadata:
+      labels:
+        app: producer
+    spec:
+      containers:
+        - name: producer
+          image: iot-producer:v1
+          imagePullPolicy: Never
+          envFrom:
+            - configMapRef:
+                name: iot-config
+          volumeMounts:
+            - name: sensor-data
+              mountPath: /data/sensors.csv
+              subPath: sensors.csv
+              readOnly: true
+      volumes:
+        - name: sensor-data
+          configMap:
+            name: sensor-data

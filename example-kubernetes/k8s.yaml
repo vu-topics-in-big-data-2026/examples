@@ -1,0 +1,185 @@
+# All-in-one Kubernetes manifest for the IoT Temperature Monitoring demo.
+# This is equivalent to applying each file in k8s/ separately.
+#
+# Usage:
+#   kubectl apply -f k8s.yaml
+#   kubectl -n streaming-iot create configmap sensor-data --from-file=data/sensors.csv
+#   kubectl -n streaming-iot wait --for=condition=Ready pod/redpanda-0 --timeout=60s
+#   kubectl -n streaming-iot logs -f deployment/analyzer
+#
+# Clean up:
+#   kubectl delete -f k8s.yaml
+#
+# Note: The sensor-data ConfigMap is created separately via kubectl
+# because it loads from a file. Everything else is in this manifest.
+# -------------------------------------------------------------------
+
+# 1. Namespace — isolates all resources for this demo
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: streaming-iot
+
+---
+
+# 2. ConfigMap — shared environment variables for producer and analyzer
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: iot-config
+  namespace: streaming-iot
+data:
+  KAFKA_BROKER: "redpanda:9092"
+  TOPIC_NAME: "iot-sensors"
+  TEMP_HIGH_THRESHOLD: "40.0"
+  TEMP_LOW_THRESHOLD: "5.0"
+  NUM_PARTITIONS: "3"
+
+---
+
+# 3. Redpanda Service (headless) — makes redpanda-0.redpanda.streaming-iot
+#    resolvable as a DNS name inside the cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda
+  namespace: streaming-iot
+spec:
+  clusterIP: None
+  selector:
+    app: redpanda
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: 9092
+    - name: admin
+      port: 9644
+      targetPort: 9644
+
+---
+
+# 4. Redpanda StatefulSet — the Kafka-compatible broker.
+#    StatefulSet (not Deployment) because it needs a stable hostname
+#    (redpanda-0) that other pods can reliably connect to.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redpanda
+  namespace: streaming-iot
+spec:
+  serviceName: redpanda
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redpanda
+  template:
+    metadata:
+      labels:
+        app: redpanda
+    spec:
+      containers:
+        - name: redpanda
+          image: redpandadata/redpanda:latest
+          command:
+            - redpanda
+            - start
+            - --smp=1
+            - --memory=512M
+            - --overprovisioned
+            - --kafka-addr=0.0.0.0:9092
+            - --advertise-kafka-addr=redpanda-0.redpanda.streaming-iot.svc.cluster.local:9092
+          ports:
+            - containerPort: 9092
+              name: kafka
+            - containerPort: 9644
+              name: admin
+          readinessProbe:
+            exec:
+              command:
+                - rpk
+                - cluster
+                - health
+                - --api-urls
+                - localhost:9644
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+---
+
+# 5. Producer Deployment — reads sensor CSV and publishes to Kafka.
+#    The sensor-data ConfigMap (created separately from the CSV file)
+#    is mounted as a file at /data/sensors.csv.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: producer
+  namespace: streaming-iot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: producer
+  template:
+    metadata:
+      labels:
+        app: producer
+    spec:
+      containers:
+        - name: producer
+          image: iot-producer:v1
+          imagePullPolicy: Never
+          envFrom:
+            - configMapRef:
+                name: iot-config
+          volumeMounts:
+            - name: sensor-data
+              mountPath: /data/sensors.csv
+              subPath: sensors.csv
+              readOnly: true
+      volumes:
+        - name: sensor-data
+          configMap:
+            name: sensor-data
+
+---
+
+# 6. Analyzer Deployment — consumes sensor readings and flags anomalies.
+#    Scale this with: kubectl -n streaming-iot scale deployment analyzer --replicas=3
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analyzer
+  namespace: streaming-iot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: analyzer
+  template:
+    metadata:
+      labels:
+        app: analyzer
+    spec:
+      containers:
+        - name: analyzer
+          image: iot-analyzer:v1
+          imagePullPolicy: Never
+          envFrom:
+            - configMapRef:
+                name: iot-config
+
+---
+
+# 7. Analyzer Service (ClusterIP) — internal-only, no external access needed.
+apiVersion: v1
+kind: Service
+metadata:
+  name: analyzer
+  namespace: streaming-iot
+spec:
+  type: ClusterIP
+  selector:
+    app: analyzer
+  ports:
+    - port: 80
+      targetPort: 80
